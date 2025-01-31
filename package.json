@@ -1,0 +1,45 @@
+{
+  "name": "irctc-booking-app",
+  "version": "1.0.0",
+  "description": "An application for scheduling IRCTC train bookings.",
+  "author": "Your Name",
+  "type": "module",
+  "main": "src/electron/main.cjs",
+  "scripts": {
+    "start": "concurrently \"vite\" \"wait-on tcp:3000 && cross-env NODE_ENV=development electron .\"",
+    "build": "electron-builder --mac --win"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^34.0.2",
+    "electron-builder": "^25.1.8",
+    "electron-is-dev": "^3.0.1",
+    "vite": "^6.0.11",
+    "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.example.irctcbookingapp",
+    "productName": "IRCTC Booking App",
+    "files": [
+      "dist/**/*",
+      "src/electron/**/*",
+      "src/react/**/*",
+      "src/python/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "src/python",
+        "to": "python"
+      }
+    ],
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

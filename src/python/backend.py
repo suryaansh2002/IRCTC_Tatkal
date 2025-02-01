@@ -1,12 +1,12 @@
 import sys
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from irctc_booking import IRCTCBooking, BookingConfig, PassengerDetails
-
+import time
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -28,12 +28,12 @@ class BookingManager:
         self.scheduler.start()
         self.active_jobs = {}
 
-    def booking_job(self, config, passenger):
+    def booking_job(self, config, all_passengers):
         """Execute the booking process"""
         job_id = f"booking_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         try:
-            send_to_frontend('log', f'Starting booking process for {passenger.name}')
+            send_to_frontend('log', f'Starting booking process for {all_passengers}')
             
             booking = IRCTCBooking(config)
             booking.initialize_driver()
@@ -49,12 +49,16 @@ class BookingManager:
             booking.select_train_and_class()
             send_to_frontend('log', f'Selected train {config.train_number}')
             
-            booking.fill_passenger_details(passenger)
-            send_to_frontend('log', 'Filled passenger details')
+            booking.fill_passenger_details(all_passengers)
+            # send_to_frontend('log', 'Filled passenger details')
             
-            booking.handle_final_captcha()
+            # booking.handle_final_captcha()
             send_to_frontend('log', 'Completed booking process')
+            print("Done")
+            time.sleep(2)
             
+            send_to_frontend('status', 'Booking completed successfully')
+            time.sleep(60)
         except Exception as e:
             error_msg = f'Booking failed: {str(e)}'
             logger.error(error_msg)
@@ -71,7 +75,8 @@ class BookingManager:
         try:
             # Parse booking data
             journey_date = datetime.strptime(booking_data['journeyDate'], '%Y-%m-%d')
-            
+            schedule_date = journey_date - timedelta(days=1)
+
             config = BookingConfig(
                 username=booking_data['username'],
                 password=booking_data['password'],
@@ -81,35 +86,47 @@ class BookingManager:
                 coach_class=booking_data['coachClass'],
                 journey_date=journey_date.strftime('%d %B %Y')
             )
-            
-            passenger = PassengerDetails(
-                name=booking_data['passengerName'],
-                age=int(booking_data['passengerAge']),
-                gender=booking_data['passengerGender'],
-                food_preference=booking_data['foodPreference']
-            )
+            all_passengers = []
+            for p in  booking_data['passengers']:                
+                passenger = PassengerDetails(
+                    name=p['passengerName'],
+                    age=int(p['passengerAge']),
+                    gender=p['passengerGender'],
+                    food_preference=p['foodPreference']
+                )
+                all_passengers.append(passenger)
 
             # Schedule job for 10 AM IST on journey date
             ist_timezone = pytz.timezone('Asia/Kolkata')
             print("JD: ", journey_date)
-            trigger = CronTrigger(
-                year=journey_date.year,
-                month=journey_date.month,
-                day=journey_date.day,
-                hour=0,
-                minute=0,
-                timezone=ist_timezone
-            )
-            
-            job = self.scheduler.add_job(
-                self.booking_job,
-                trigger=trigger,
-                args=[config, passenger]
-            )
-            
-            job_id = f"booking_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            self.active_jobs[job_id] = job
-            
+            current_time_ist = datetime.now(ist_timezone)
+
+            # Target schedule time: 10 AM IST one day before journey
+            schedule_time = ist_timezone.localize(datetime(schedule_date.year, schedule_date.month, schedule_date.day, 10, 0))
+
+            if current_time_ist > schedule_time:
+                print("Scheduled time has passed. Running job immediately.")
+                # Call the function to execute immediately
+                self.booking_job(config, all_passengers)
+            else:
+                print("Scheduling job for: ", schedule_time)
+                trigger = CronTrigger(
+                    year=schedule_date.year,
+                    month=schedule_date.month,
+                    day=schedule_date.day,
+                    hour=10,
+                    minute=0,
+                    timezone=ist_timezone
+                )
+                job = self.scheduler.add_job(
+                    self.booking_job,
+                    trigger=trigger,
+                    args=[config, all_passengers]
+                )
+                
+                job_id = f"booking_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                self.active_jobs[job_id] = job
+                
             success_msg = f'Booking scheduled for {journey_date.strftime("%d %B %Y")} at 10:00 AM IST'
             send_to_frontend('status', success_msg)
             send_to_frontend('log', success_msg)
@@ -130,6 +147,7 @@ def main():
             message = input()
             if message.strip():
                 booking_data = json.loads(message)
+                print(booking_data)
                 booking_manager.schedule_booking(booking_data)
         except Exception as e:
             logger.error(f'Error processing message: {str(e)}')

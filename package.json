@@ -36,10 +36,12 @@
       }
     ],
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "assets/logo.png"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "assets/logo.ico"
     }
   }
 }

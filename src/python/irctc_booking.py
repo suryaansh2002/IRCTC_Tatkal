@@ -260,46 +260,71 @@ class IRCTCBooking:
             logger.error(f"Failed to select train and class: {str(e)}")
             raise
 
-    def fill_passenger_details(self, passenger: PassengerDetails):
+    def fill_passenger_details(self, all_passengers):
         """Fill in the passenger details"""
         try:
             self.wait.until(
                 EC.visibility_of_element_located((By.XPATH, "//input[@placeholder='Name']"))
             )
 
-            name_input = self.driver.find_element(By.XPATH, "//input[@placeholder='Name']")
-            name_input.clear()
-            name_input.send_keys(passenger.name)
+            for index in range(len(all_passengers)):
+                passenger = all_passengers[index]
 
-            age_input = self.driver.find_element(
-                By.XPATH, "//input[@formcontrolname='passengerAge']"
-            )
-            age_input.clear()
-            age_input.send_keys(str(passenger.age))
+                # Find all name input elements and use the one corresponding to the current index.
+                name_inputs = self.driver.find_elements(By.XPATH, "//input[@placeholder='Name']")
+                if index < len(name_inputs):
+                    name_input = name_inputs[index]
+                    name_input.clear()
+                    name_input.send_keys(passenger.name)
+                else:
+                    logger.error(f"No name input found for passenger index {index}")
 
-            gender_select = Select(
-                self.driver.find_element(
-                    By.XPATH, "//select[@formcontrolname='passengerGender']"
-                )
-            )
-            gender_mapping = {'Male': 'M', 'Female': 'F', 'Transgender': 'T'}
-            gender_value = gender_mapping.get(passenger.gender, 'M')
-            gender_select.select_by_value(gender_value)
+                # Find all age input elements.
+                age_inputs = self.driver.find_elements(By.XPATH, "//input[@formcontrolname='passengerAge']")
+                if index < len(age_inputs):
+                    age_input = age_inputs[index]
+                    age_input.clear()
+                    age_input.send_keys(str(passenger.age))
+                else:
+                    logger.error(f"No age input found for passenger index {index}")
 
-            try:
-                self.wait.until(EC.presence_of_element_located((By.ID, "FOOD_0")))
-                self.wait.until(
-                    EC.presence_of_all_elements_located(
-                        (By.XPATH, "//select[@id='FOOD_0']/option")
-                    )
-                )
-                
-                dropdown = self.driver.find_element(By.ID, "FOOD_0")
-                select = Select(dropdown)
-                select.select_by_value(passenger.food_preference)
-                logger.info(f"Food preference '{passenger.food_preference}' selected")
-            except Exception as e:
-                logger.warning(f"Food selection not available: {str(e)}")
+                # Find all gender select elements.
+                gender_select_elements = self.driver.find_elements(By.XPATH, "//select[@formcontrolname='passengerGender']")
+                if index < len(gender_select_elements):
+                    gender_select = Select(gender_select_elements[index])
+                    gender_mapping = {'Male': 'M', 'Female': 'F', 'Transgender': 'T'}
+                    gender_value = gender_mapping.get(passenger.gender, 'M')
+                    gender_select.select_by_value(gender_value)
+                else:
+                    logger.error(f"No gender select found for passenger index {index}")
+
+                # Wait and find all food dropdown elements.
+                try:
+                    # Wait until all food dropdowns are present
+                    self.wait.until(EC.presence_of_all_elements_located((By.XPATH, "//select[@id='FOOD_0']")))
+                    food_dropdowns = self.driver.find_elements(By.XPATH, "//select[@id='FOOD_0']")
+                    if index < len(food_dropdowns):
+                        dropdown = food_dropdowns[index]
+                        food_select = Select(dropdown)
+                        food_select.select_by_value(passenger.food_preference)
+                        logger.info(f"Food preference '{passenger.food_preference}' selected for passenger index {index}")
+                    else:
+                        logger.warning(f"No food dropdown available for passenger index {index}")
+                except Exception as e:
+                    logger.warning(f"Food selection not available for passenger index {index}: {str(e)}")
+
+                # If not the last passenger, click the "+ Add Passenger" button to add the next one.
+                if index != len(all_passengers) - 1:
+                    try:
+                        # Find the add passenger button. Adjust this locator if necessary.
+                        add_passenger_elements = self.driver.find_elements(By.XPATH, "//span[contains(text(),'+ Add Passenger')]")
+                        if add_passenger_elements:
+                            add_passenger_element = add_passenger_elements[0]
+                            add_passenger_element.click()
+                        else:
+                            logger.error("'+ Add Passenger' button not found")
+                    except Exception as e:
+                        logger.error(f"Error clicking '+ Add Passenger' for passenger index {index}: {str(e)}")
 
             continue_button = self.wait.until(
                 EC.element_to_be_clickable(
@@ -315,6 +340,7 @@ class IRCTCBooking:
     def handle_final_captcha(self):
         """Handle the final captcha before booking confirmation"""
         try:
+            time.sleep(10)
             captcha_text = self.solve_captcha()
             captcha_field = self.driver.find_element(
                 By.XPATH, "//input[@placeholder='Enter Captcha']"
@@ -324,6 +350,8 @@ class IRCTCBooking:
             submit_button = self.driver.find_element(
                 By.XPATH, "//button[text()='Continue ']"
             )
+            time.sleep(10)
+            
             submit_button.click()
             logger.info("Final captcha submitted successfully")
         except Exception as e:
@@ -337,7 +365,7 @@ class IRCTCBooking:
             logger.info("Browser session closed")
 
 
-def schedule_booking(config: BookingConfig, passenger: PassengerDetails):
+def schedule_booking(config: BookingConfig, all_passengers):
     """Schedule the booking job for 10 AM IST on journey date"""
     scheduler = BlockingScheduler()
     
@@ -354,10 +382,10 @@ def schedule_booking(config: BookingConfig, passenger: PassengerDetails):
             time.sleep(2)
             booking.select_train_and_class()
             time.sleep(2)
-            booking.fill_passenger_details(passenger)
+            booking.fill_passenger_details(all_passengers)
             time.sleep(20)
-            booking.handle_final_captcha()
-            time.sleep(5)
+            # booking.handle_final_captcha()
+            time.sleep(60)
         except Exception as e:
             logger.error(f"Booking failed: {str(e)}")
         finally:
@@ -383,25 +411,55 @@ def schedule_booking(config: BookingConfig, passenger: PassengerDetails):
         scheduler.shutdown()
 
 
+def booking_main(config, all_passengers):
+    booking = IRCTCBooking(config)
+    try:
+        booking.initialize_driver()
+        booking.login()
+        booking.handle_source_and_destination()
+        time.sleep(2)
+        booking.select_train_and_class()
+        time.sleep(2)
+        booking.fill_passenger_details(all_passengers)
+        time.sleep(20)
+        # booking.handle_final_captcha()
+        # time.sleep(60)
+    except Exception as e:
+        logger.error(f"Booking failed: {str(e)}")
+    finally:
+        booking.cleanup()
+
+
 def main():
     config = BookingConfig(
-        username="XXXX",
-        password="XXXX",
+        username="Suryaansh2002",
+        password="Suryaansh*123*",
         source="Pune",
-        destination="LTT",
-        train_number="12220",
+        destination="PNVL",
+        train_number="22150",
         coach_class="AC 3 Tier (3A)",
-        journey_date="01 February 2025"
+        journey_date="02 February 2025"
     )
 
-    passenger = PassengerDetails(
+    passenger1 = PassengerDetails(
         name="John Doe",
         age=25,
         gender="Male",
         food_preference="V"
     )
 
-    schedule_booking(config, passenger)
+    passenger2 = PassengerDetails(
+        name="Jane Doe",
+        age=22,
+        gender="Female",
+        food_preference="V"
+    )
+
+    all_passengers = [passenger1, passenger2]
+
+    schedule_booking(config, all_passengers)
+    # booking_main(config, all_passengers)
+    
 
 if __name__ == "__main__":
     main()

@@ -6,6 +6,7 @@ let mainWindow;
 let pythonProcess;
 
 function createWindow() {
+  console.log(path.join(__dirname, 'assets/logo.png'))
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -13,7 +14,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
-    }
+    },
+    icon: path.join(__dirname, 'assets/logo.png') // Set the path to your icon
   });
 
   mainWindow.loadURL('http://localhost:3000');

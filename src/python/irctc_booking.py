@@ -457,8 +457,8 @@ def main():
 
     all_passengers = [passenger1, passenger2]
 
-    schedule_booking(config, all_passengers)
-    # booking_main(config, all_passengers)
+    # schedule_booking(config, all_passengers)
+    booking_main(config, all_passengers)
     
 
 if __name__ == "__main__":

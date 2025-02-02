@@ -6,7 +6,7 @@
   "type": "module",
   "main": "src/electron/main.cjs",
   "scripts": {
-    "start": "concurrently \"vite\" \"wait-on tcp:3000 && cross-env NODE_ENV=development electron .\"",
+    "start": "concurrently \"cross-env NODE_ENV=development vite\" \"wait-on tcp:3000 && cross-env NODE_ENV=development electron .\"",
     "build": "electron-builder --mac --win"
   },
   "devDependencies": {
@@ -29,12 +29,13 @@
       "src/python/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "src/python",
-        "to": "python"
-      }
-    ],
+   "extraResources": [
+  {
+    "from": "dist/irctc_backend",
+    "to": "backend"
+  }
+],
+
     "mac": {
       "target": "dmg",
       "icon": "assets/logo.png"

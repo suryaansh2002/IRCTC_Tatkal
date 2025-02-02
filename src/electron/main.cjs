@@ -18,8 +18,15 @@ function createWindow() {
     icon: path.join(__dirname, 'assets/logo.png') // Set the path to your icon
   });
 
-  mainWindow.loadURL('http://localhost:3000');
-  mainWindow.webContents.openDevTools();
+  const startURL = process.env.NODE_ENV === 'development'
+    ? 'http://localhost:3000'
+    : `file://${path.join(__dirname, '../react/index.html')}`;
+
+  mainWindow.loadURL(startURL).catch(err => console.error(`Failed to load UI: ${err}`));
+
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.openDevTools();
+  }
 }
 
 app.whenReady().then(() => {
@@ -27,7 +34,15 @@ app.whenReady().then(() => {
 
   console.log("App Ready")
   // Spawn the Python process
-  pythonProcess = spawn('python', ['src/python/backend.py']);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Starting Python backend in development mode');
+    pythonProcess = spawn('python', ['src/python/backend.py']);
+  } else {
+    console.log('Starting Python backend in production mode');
+    const pythonExecutable = path.join(process.resourcesPath, 'backend', 'irctc_backend');
+    pythonProcess = spawn(pythonExecutable);
+  }
+
   // Handle data from Python
   pythonProcess.stdout.on('data', (data) => {
     console.log(`Python stdout: ${data}`);
